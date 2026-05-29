@@ -15,6 +15,7 @@ export default function QuartoPage() {
   const [erro, setErro] = useState('')
 
   useEffect(() => {
+    if (!supabase) return
     supabase.from('quartos').select('*').eq('id', id).single().then(({ data }) => setQuarto(data))
     supabase.from('bloqueios').select('*').eq('quarto_id', id).then(({ data }) => setBloqueios(data || []))
     supabase.from('reservas').select('*').eq('quarto_id', id).in('status', ['confirmada', 'paga']).then(({ data }) => setReservas(data || []))
@@ -39,6 +40,7 @@ export default function QuartoPage() {
     router.push(`/reservar?quarto=${id}&checkin=${checkin}&checkout=${checkout}`)
   }
 
+  if (!supabase) return <div style={{ padding: 40, textAlign: 'center', color: '#1A5276', fontFamily: 'sans-serif' }}>Supabase nao configurado.</div>
   if (!quarto) return <div style={{ padding: 40, textAlign: 'center', color: '#1A5276', fontFamily: 'sans-serif' }}>Carregando...</div>
 
   const hoje = new Date().toISOString().split('T')[0]

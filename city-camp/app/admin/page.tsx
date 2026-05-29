@@ -17,6 +17,7 @@ export default function AdminPage() {
   const [msg, setMsg] = useState('')
 
   const carregar = async () => {
+    if (!supabase) return
     const { data: r } = await supabase.from('reservas').select('*, quartos(nome)').order('created_at', { ascending: false })
     const { data: q } = await supabase.from('quartos').select('*').order('created_at')
     setReservas(r || [])
@@ -31,12 +32,14 @@ export default function AdminPage() {
   }
 
   const cancelarReserva = async (id: string) => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
     if (!confirm('Cancelar esta reserva?')) return
     await supabase.from('reservas').update({ status: 'cancelada' }).eq('id', id)
     carregar()
   }
 
   const salvarBloqueio = async () => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
     if (!bloqueio.quarto_id || !bloqueio.data_inicio || !bloqueio.data_fim) return alert('Preencha todos os campos')
     await supabase.from('bloqueios').insert(bloqueio)
     setBloqueio({ quarto_id: '', data_inicio: '', data_fim: '', motivo: '' })
@@ -45,6 +48,7 @@ export default function AdminPage() {
   }
 
   const salvarPromocao = async () => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
     if (!promocao.titulo || !promocao.desconto_percentual) return alert('Preencha todos os campos')
     await supabase.from('promocoes').insert({ ...promocao, desconto_percentual: parseFloat(promocao.desconto_percentual), ativo: true })
     setPromocao({ titulo: '', descricao: '', desconto_percentual: '', data_inicio: '', data_fim: '' })
@@ -53,6 +57,7 @@ export default function AdminPage() {
   }
 
   const salvarQuarto = async () => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
     if (!novoQuarto.nome || !novoQuarto.preco) return alert('Preencha nome e preço')
     await supabase.from('quartos').insert({
       ...novoQuarto,

@@ -17,7 +17,7 @@ function ReservarForm() {
   const [form, setForm] = useState({ nome: '', email: '', telefone: '', observacoes: '' })
 
   useEffect(() => {
-    if (quartoId) supabase.from('quartos').select('*').eq('id', quartoId).single().then(({ data }) => setQuarto(data))
+    if (quartoId && supabase) supabase.from('quartos').select('*').eq('id', quartoId).single().then(({ data }) => setQuarto(data))
   }, [quartoId])
 
   const noites = checkin && checkout
@@ -27,6 +27,7 @@ function ReservarForm() {
   const total = quarto ? quarto.preco * noites : 0
 
   const handleSubmit = async () => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
     if (!form.nome || !form.email || !form.telefone) return alert('Preencha todos os campos obrigatórios')
     setLoading(true)
     const { data, error } = await supabase.from('reservas').insert({
@@ -53,6 +54,7 @@ function ReservarForm() {
     router.push(`/confirmacao?id=${data.id}`)
   }
 
+  if (!supabase) return <div style={{ padding: 40, textAlign: 'center', color: '#1A5276', fontFamily: 'sans-serif' }}>Supabase nao configurado.</div>
   if (!quarto) return <div style={{ padding: 40, textAlign: 'center', color: '#1A5276', fontFamily: 'sans-serif' }}>Carregando...</div>
 
   const fmtData = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })

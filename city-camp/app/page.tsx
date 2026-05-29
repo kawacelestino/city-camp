@@ -2,11 +2,13 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
 async function getQuartos() {
+  if (!supabase) return []
   const { data } = await supabase.from('quartos').select('*').eq('ativo', true)
   return data || []
 }
 
 async function getPromocoes() {
+  if (!supabase) return []
   const { data } = await supabase
     .from('promocoes')
     .select('*')
@@ -62,6 +64,11 @@ export default async function Home() {
         <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '26px', fontWeight: 700, marginBottom: '4px', color: '#1A5276' }}>Nossos quartos</h2>
         <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px' }}>Escolha o quarto ideal para sua estadia</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+          {quartos.length === 0 && (
+            <div style={{ background: '#fff', borderRadius: '16px', border: '0.5px solid #e0d8c8', padding: '28px', color: '#666', gridColumn: '1 / -1' }}>
+              Os quartos serao exibidos aqui quando o Supabase estiver configurado.
+            </div>
+          )}
           {quartos.map((q: any) => (
             <div key={q.id} style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '0.5px solid #e0d8c8', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
               <div style={{ height: '180px', background: '#1A5276', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '56px' }}>

@@ -11,17 +11,19 @@ function ConfirmacaoContent() {
   const [quarto, setQuarto] = useState<any>(null)
 
   useEffect(() => {
-    if (id) {
-      supabase.from('reservas').select('*').eq('id', id).single().then(async ({ data }) => {
+    const client = supabase
+    if (id && client) {
+      client.from('reservas').select('*').eq('id', id).single().then(async ({ data }) => {
         setReserva(data)
         if (data?.quarto_id) {
-          const { data: q } = await supabase.from('quartos').select('*').eq('id', data.quarto_id).single()
+          const { data: q } = await client.from('quartos').select('*').eq('id', data.quarto_id).single()
           setQuarto(q)
         }
       })
     }
   }, [id])
 
+  if (!supabase) return <div style={{ padding: 40, textAlign: 'center', color: '#1A5276', fontFamily: 'sans-serif' }}>Supabase nao configurado.</div>
   if (!reserva) return <div style={{ padding: 40, textAlign: 'center', color: '#1A5276', fontFamily: 'sans-serif' }}>Carregando...</div>
 
   const fmtData = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
