@@ -1,34 +1,101 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
 const ADMIN_PASSWORD = 'citycamp2025'
 
+type Reserva = {
+  id: string
+  cliente_nome: string
+  cliente_telefone: string
+  data_checkin: string
+  data_checkout: string
+  valor_total: number
+  status: string
+  quartos?: { nome: string | null } | null
+}
+
+type Quarto = {
+  id: string
+  nome: string
+  descricao: string | null
+  preco: number
+  capacidade: number
+  comodidades: string[] | null
+  fotos: string[] | null
+  ativo: boolean
+}
+
+type QuartoEditavel = {
+  id: string
+  nome: string
+  descricao: string
+  preco: string
+  capacidade: string
+  comodidades: string
+  fotos: string
+  ativo: boolean
+}
+
+type NovoQuarto = {
+  nome: string
+  descricao: string
+  preco: string
+  capacidade: string
+  comodidades: string
+  fotos: string
+}
+
+type Promocao = {
+  id: string
+  titulo: string
+  descricao: string | null
+  desconto_percentual: number
+  data_inicio: string | null
+  data_fim: string | null
+  ativo: boolean
+}
+
+type PromocaoEditavel = {
+  id: string
+  titulo: string
+  descricao: string
+  desconto_percentual: string
+  data_inicio: string
+  data_fim: string
+  ativo: boolean
+}
+
 export default function AdminPage() {
   const [logado, setLogado] = useState(false)
   const [senha, setSenha] = useState('')
-  const [reservas, setReservas] = useState<any[]>([])
-  const [quartos, setQuartos] = useState<any[]>([])
+  const [reservas, setReservas] = useState<Reserva[]>([])
+  const [quartos, setQuartos] = useState<Quarto[]>([])
+  const [promocoes, setPromocoes] = useState<Promocao[]>([])
   const [aba, setAba] = useState<'reservas'|'quartos'|'bloqueios'|'promocoes'>('quartos')
   const [bloqueio, setBloqueio] = useState({ quarto_id: '', data_inicio: '', data_fim: '', motivo: '' })
   const [promocao, setPromocao] = useState({ titulo: '', descricao: '', desconto_percentual: '', data_inicio: '', data_fim: '' })
-  const [novoQuarto, setNovoQuarto] = useState({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '', fotos: '' })
-  const [editandoQuarto, setEditandoQuarto] = useState<any | null>(null)
+  const [novoQuarto, setNovoQuarto] = useState<NovoQuarto>({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '', fotos: '' })
+  const [editandoQuarto, setEditandoQuarto] = useState<QuartoEditavel | null>(null)
+  const [editandoPromocao, setEditandoPromocao] = useState<PromocaoEditavel | null>(null)
   const [msg, setMsg] = useState('')
 
   const carregar = async () => {
     if (!supabase) return
     const { data: r } = await supabase.from('reservas').select('*, quartos(nome)').order('created_at', { ascending: false })
     const { data: q } = await supabase.from('quartos').select('*').order('created_at')
-    setReservas(r || [])
-    setQuartos(q || [])
+    const { data: p } = await supabase.from('promocoes').select('*').order('created_at', { ascending: false })
+    setReservas((r || []) as Reserva[])
+    setQuartos((q || []) as Quarto[])
+    setPromocoes((p || []) as Promocao[])
   }
 
-  useEffect(() => { if (logado) carregar() }, [logado])
-
   const login = () => {
-    if (senha === ADMIN_PASSWORD) setLogado(true)
+    if (senha === ADMIN_PASSWORD) {
+      setLogado(true)
+      carregar()
+    }
     else alert('Senha incorreta!')
   }
 
@@ -54,6 +121,58 @@ export default function AdminPage() {
     await supabase.from('promocoes').insert({ ...promocao, desconto_percentual: parseFloat(promocao.desconto_percentual), ativo: true })
     setPromocao({ titulo: '', descricao: '', desconto_percentual: '', data_inicio: '', data_fim: '' })
     setMsg('Promoção criada!')
+    carregar()
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const iniciarEdicaoPromocao = (p: Promocao) => {
+    setEditandoPromocao({
+      ...p,
+      descricao: p.descricao || '',
+      desconto_percentual: String(p.desconto_percentual ?? ''),
+      data_inicio: p.data_inicio || '',
+      data_fim: p.data_fim || '',
+      ativo: Boolean(p.ativo),
+    })
+  }
+
+  const salvarEdicaoPromocao = async () => {
+    if (!supabase || !editandoPromocao) return
+    if (!editandoPromocao.titulo || !editandoPromocao.desconto_percentual) return alert('Preencha titulo e desconto')
+
+    const { error } = await supabase.from('promocoes').update({
+      titulo: editandoPromocao.titulo,
+      descricao: editandoPromocao.descricao,
+      desconto_percentual: parseFloat(editandoPromocao.desconto_percentual),
+      data_inicio: editandoPromocao.data_inicio,
+      data_fim: editandoPromocao.data_fim,
+      ativo: editandoPromocao.ativo,
+    }).eq('id', editandoPromocao.id)
+
+    if (error) return alert('Erro ao salvar promoção: ' + error.message)
+    setEditandoPromocao(null)
+    setMsg('Promoção atualizada!')
+    carregar()
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const alternarPromocao = async (p: Promocao) => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
+    const { error } = await supabase.from('promocoes').update({ ativo: !p.ativo }).eq('id', p.id)
+    if (error) return alert('Erro ao atualizar promoção: ' + error.message)
+    setMsg(p.ativo ? 'Promoção desativada!' : 'Promoção ativada!')
+    carregar()
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const excluirPromocao = async (id: string) => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
+    if (!confirm('Remover esta promoção?')) return
+    const { error } = await supabase.from('promocoes').delete().eq('id', id)
+    if (error) return alert('Erro ao remover promoção: ' + error.message)
+    if (editandoPromocao?.id === id) setEditandoPromocao(null)
+    setMsg('Promoção removida!')
+    carregar()
     setTimeout(() => setMsg(''), 3000)
   }
 
@@ -74,9 +193,10 @@ export default function AdminPage() {
     setTimeout(() => setMsg(''), 3000)
   }
 
-  const iniciarEdicaoQuarto = (q: any) => {
+  const iniciarEdicaoQuarto = (q: Quarto) => {
     setEditandoQuarto({
       ...q,
+      descricao: q.descricao || '',
       preco: String(q.preco ?? ''),
       capacidade: String(q.capacidade ?? '2'),
       comodidades: (q.comodidades || []).join(', '),
@@ -103,7 +223,7 @@ export default function AdminPage() {
     setTimeout(() => setMsg(''), 3000)
   }
 
-  const statusColor: any = { confirmada: '#1D6A3A', pendente: '#D4AC0D', cancelada: '#c0392b', paga: '#1A5276' }
+  const statusColor: Record<string, string> = { confirmada: '#1D6A3A', pendente: '#D4AC0D', cancelada: '#c0392b', paga: '#1A5276' }
   const fmtData = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR')
   const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' as const }
   const labelStyle = { display: 'block', fontSize: '12px', fontWeight: 600 as const, color: '#888', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '6px' }
@@ -111,6 +231,12 @@ export default function AdminPage() {
     padding: '10px 20px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 as const,
     background: aba === a ? '#1A5276' : 'transparent', color: aba === a ? '#fff' : '#555'
   })
+  const camposNovoQuarto: Array<{ label: string; key: keyof NovoQuarto; placeholder: string }> = [
+    { label: 'Nome do quarto *', key: 'nome', placeholder: 'Ex: SuÃ­te Deluxe' },
+    { label: 'PreÃ§o por noite (R$) *', key: 'preco', placeholder: '250.00' },
+    { label: 'Capacidade (pessoas)', key: 'capacidade', placeholder: '2' },
+    { label: 'Comodidades (separadas por vÃ­rgula)', key: 'comodidades', placeholder: 'Wi-Fi, Ar-cond, TV' },
+  ]
 
   if (!logado) return (
     <main style={{ fontFamily: 'sans-serif', minHeight: '100vh', background: '#F9F5EE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -240,30 +366,30 @@ export default function AdminPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <label style={labelStyle}>Nome do quarto</label>
-                    <input value={editandoQuarto.nome} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, nome: e.target.value }))} style={inputStyle} />
+                    <input value={editandoQuarto.nome} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, nome: e.target.value }) : prev)} style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Preco por noite (R$)</label>
-                    <input value={editandoQuarto.preco} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, preco: e.target.value }))} style={inputStyle} />
+                    <input value={editandoQuarto.preco} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, preco: e.target.value }) : prev)} style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Capacidade</label>
-                    <input value={editandoQuarto.capacidade} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, capacidade: e.target.value }))} style={inputStyle} />
+                    <input value={editandoQuarto.capacidade} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, capacidade: e.target.value }) : prev)} style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Comodidades</label>
-                    <input value={editandoQuarto.comodidades} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, comodidades: e.target.value }))} style={inputStyle} />
+                    <input value={editandoQuarto.comodidades} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, comodidades: e.target.value }) : prev)} style={inputStyle} />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>Descricao</label>
-                    <textarea value={editandoQuarto.descricao || ''} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, descricao: e.target.value }))} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+                    <textarea value={editandoQuarto.descricao || ''} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, descricao: e.target.value }) : prev)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>Fotos por URL</label>
-                    <textarea value={editandoQuarto.fotos} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, fotos: e.target.value }))} rows={4} placeholder="Cole uma URL de imagem por linha" style={{ ...inputStyle, resize: 'vertical' }} />
+                    <textarea value={editandoQuarto.fotos} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, fotos: e.target.value }) : prev)} rows={4} placeholder="Cole uma URL de imagem por linha" style={{ ...inputStyle, resize: 'vertical' }} />
                   </div>
                   <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#555', fontSize: '14px' }}>
-                    <input type="checkbox" checked={editandoQuarto.ativo} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, ativo: e.target.checked }))} />
+                    <input type="checkbox" checked={editandoQuarto.ativo} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, ativo: e.target.checked }) : prev)} />
                     Quarto ativo
                   </label>
                 </div>
@@ -281,15 +407,10 @@ export default function AdminPage() {
             <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8' }}>
               <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '20px' }}>Adicionar novo quarto</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {[
-                  { label: 'Nome do quarto *', key: 'nome', placeholder: 'Ex: Suíte Deluxe' },
-                  { label: 'Preço por noite (R$) *', key: 'preco', placeholder: '250.00' },
-                  { label: 'Capacidade (pessoas)', key: 'capacidade', placeholder: '2' },
-                  { label: 'Comodidades (separadas por vírgula)', key: 'comodidades', placeholder: 'Wi-Fi, Ar-cond, TV' },
-                ].map(f => (
+                {camposNovoQuarto.map(f => (
                   <div key={f.key}>
                     <label style={labelStyle}>{f.label}</label>
-                    <input type="text" placeholder={f.placeholder} value={(novoQuarto as any)[f.key]}
+                    <input type="text" placeholder={f.placeholder} value={novoQuarto[f.key]}
                       onChange={e => setNovoQuarto(prev => ({ ...prev, [f.key]: e.target.value }))}
                       style={inputStyle} />
                   </div>
@@ -352,38 +473,129 @@ export default function AdminPage() {
 
         {/* Promoções */}
         {aba === 'promocoes' && (
-          <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8', maxWidth: '560px' }}>
-            <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '8px' }}>Criar promoção</h3>
-            <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px' }}>A promoção aparecerá em destaque na página inicial do site.</p>
-            <div style={{ display: 'grid', gap: '16px' }}>
-              <div>
-                <label style={labelStyle}>Título da promoção *</label>
-                <input type="text" placeholder="Ex: Promoção Fim de Semana" value={promocao.titulo}
-                  onChange={e => setPromocao(prev => ({ ...prev, titulo: e.target.value }))} style={inputStyle} />
+          <div style={{ display: 'grid', gap: '24px', maxWidth: '760px' }}>
+            <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8' }}>
+              <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '8px' }}>Promocoes cadastradas</h3>
+              <p style={{ color: '#888', fontSize: '14px', marginBottom: '20px' }}>Edite, desative ou remova promocoes que aparecem na pagina inicial.</p>
+
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {promocoes.map(p => (
+                  <div key={p.id} style={{ border: '0.5px solid #e0d8c8', borderRadius: '12px', padding: '16px', background: p.ativo ? '#fff' : '#fdf0f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <h4 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', fontSize: '16px', margin: 0 }}>{p.titulo}</h4>
+                          <span style={{ background: p.ativo ? '#1D6A3A22' : '#c0392b22', color: p.ativo ? '#1D6A3A' : '#c0392b', fontSize: '11px', padding: '2px 8px', borderRadius: '10px' }}>
+                            {p.ativo ? 'Ativa' : 'Inativa'}
+                          </span>
+                        </div>
+                        <p style={{ color: '#777', fontSize: '13px', margin: '6px 0' }}>{p.descricao || 'Sem descricao'}</p>
+                        <div style={{ color: '#555', fontSize: '12px' }}>
+                          {p.desconto_percentual}% OFF
+                          {p.data_inicio && ` | De ${fmtData(p.data_inicio)}`}
+                          {p.data_fim && ` ate ${fmtData(p.data_fim)}`}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button onClick={() => iniciarEdicaoPromocao(p)} style={{ background: '#F9F5EE', color: '#1A5276', border: '1px solid #e0d8c8', padding: '7px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                          Editar
+                        </button>
+                        <button onClick={() => alternarPromocao(p)} style={{ background: '#fff', color: p.ativo ? '#c0392b' : '#1D6A3A', border: '1px solid #ddd', padding: '7px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                          {p.ativo ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button onClick={() => excluirPromocao(p.id)} style={{ background: '#fdf0f0', color: '#c0392b', border: '0.5px solid #f5c6c6', padding: '7px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {promocoes.length === 0 && (
+                  <div style={{ border: '0.5px dashed #d8ccb8', borderRadius: '12px', padding: '24px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+                    Nenhuma promocao cadastrada.
+                  </div>
+                )}
               </div>
-              <div>
-                <label style={labelStyle}>Descrição</label>
-                <input type="text" placeholder="Ex: Reserve sex+sab com 20% de desconto" value={promocao.descricao}
-                  onChange={e => setPromocao(prev => ({ ...prev, descricao: e.target.value }))} style={inputStyle} />
+            </div>
+
+            {editandoPromocao && (
+              <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8' }}>
+                <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '20px' }}>Editar promocao</h3>
+                <div style={{ display: 'grid', gap: '16px' }}>
+                  <div>
+                    <label style={labelStyle}>Titulo da promocao *</label>
+                    <input type="text" value={editandoPromocao.titulo}
+                      onChange={e => setEditandoPromocao(prev => prev ? ({ ...prev, titulo: e.target.value }) : prev)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Descricao</label>
+                    <input type="text" value={editandoPromocao.descricao || ''}
+                      onChange={e => setEditandoPromocao(prev => prev ? ({ ...prev, descricao: e.target.value }) : prev)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Desconto (%) *</label>
+                    <input type="number" value={editandoPromocao.desconto_percentual}
+                      onChange={e => setEditandoPromocao(prev => prev ? ({ ...prev, desconto_percentual: e.target.value }) : prev)} style={inputStyle} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div>
+                      <label style={labelStyle}>Valida de</label>
+                      <input type="date" value={editandoPromocao.data_inicio} onChange={e => setEditandoPromocao(prev => prev ? ({ ...prev, data_inicio: e.target.value }) : prev)} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Valida ate</label>
+                      <input type="date" value={editandoPromocao.data_fim} onChange={e => setEditandoPromocao(prev => prev ? ({ ...prev, data_fim: e.target.value }) : prev)} style={inputStyle} />
+                    </div>
+                  </div>
+                  <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#555', fontSize: '14px' }}>
+                    <input type="checkbox" checked={editandoPromocao.ativo} onChange={e => setEditandoPromocao(prev => prev ? ({ ...prev, ativo: e.target.checked }) : prev)} />
+                    Promocao ativa
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                  <button onClick={salvarEdicaoPromocao} style={{ background: '#1A5276', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                    Salvar alteracoes
+                  </button>
+                  <button onClick={() => setEditandoPromocao(null)} style={{ background: '#fff', color: '#777', border: '1px solid #ddd', padding: '12px 20px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}>
+                    Cancelar
+                  </button>
+                </div>
               </div>
-              <div>
-                <label style={labelStyle}>Desconto (%) *</label>
-                <input type="number" placeholder="20" value={promocao.desconto_percentual}
-                  onChange={e => setPromocao(prev => ({ ...prev, desconto_percentual: e.target.value }))} style={inputStyle} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            )}
+
+            <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8' }}>
+              <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '8px' }}>Criar promocao</h3>
+              <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px' }}>A promocao aparecera em destaque na pagina inicial do site.</p>
+              <div style={{ display: 'grid', gap: '16px' }}>
                 <div>
-                  <label style={labelStyle}>Válida de</label>
-                  <input type="date" value={promocao.data_inicio} onChange={e => setPromocao(prev => ({ ...prev, data_inicio: e.target.value }))} style={inputStyle} />
+                  <label style={labelStyle}>Titulo da promocao *</label>
+                  <input type="text" placeholder="Ex: Promocao Fim de Semana" value={promocao.titulo}
+                    onChange={e => setPromocao(prev => ({ ...prev, titulo: e.target.value }))} style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Válida até</label>
-                  <input type="date" value={promocao.data_fim} onChange={e => setPromocao(prev => ({ ...prev, data_fim: e.target.value }))} style={inputStyle} />
+                  <label style={labelStyle}>Descricao</label>
+                  <input type="text" placeholder="Ex: Reserve sex+sab com 20% de desconto" value={promocao.descricao}
+                    onChange={e => setPromocao(prev => ({ ...prev, descricao: e.target.value }))} style={inputStyle} />
                 </div>
+                <div>
+                  <label style={labelStyle}>Desconto (%) *</label>
+                  <input type="number" placeholder="20" value={promocao.desconto_percentual}
+                    onChange={e => setPromocao(prev => ({ ...prev, desconto_percentual: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={labelStyle}>Valida de</label>
+                    <input type="date" value={promocao.data_inicio} onChange={e => setPromocao(prev => ({ ...prev, data_inicio: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Valida ate</label>
+                    <input type="date" value={promocao.data_fim} onChange={e => setPromocao(prev => ({ ...prev, data_fim: e.target.value }))} style={inputStyle} />
+                  </div>
+                </div>
+                <button onClick={salvarPromocao} style={{ background: '#D4AC0D', color: '#3D2B00', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', width: 'fit-content' }}>
+                  Criar Promocao
+                </button>
               </div>
-              <button onClick={salvarPromocao} style={{ background: '#D4AC0D', color: '#3D2B00', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', width: 'fit-content' }}>
-                🏷️ Criar Promoção
-              </button>
             </div>
           </div>
         )}
