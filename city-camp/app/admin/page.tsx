@@ -10,10 +10,11 @@ export default function AdminPage() {
   const [senha, setSenha] = useState('')
   const [reservas, setReservas] = useState<any[]>([])
   const [quartos, setQuartos] = useState<any[]>([])
-  const [aba, setAba] = useState<'reservas'|'quartos'|'bloqueios'|'promocoes'>('reservas')
+  const [aba, setAba] = useState<'reservas'|'quartos'|'bloqueios'|'promocoes'>('quartos')
   const [bloqueio, setBloqueio] = useState({ quarto_id: '', data_inicio: '', data_fim: '', motivo: '' })
   const [promocao, setPromocao] = useState({ titulo: '', descricao: '', desconto_percentual: '', data_inicio: '', data_fim: '' })
-  const [novoQuarto, setNovoQuarto] = useState({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '' })
+  const [novoQuarto, setNovoQuarto] = useState({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '', fotos: '' })
+  const [editandoQuarto, setEditandoQuarto] = useState<any | null>(null)
   const [msg, setMsg] = useState('')
 
   const carregar = async () => {
@@ -60,13 +61,44 @@ export default function AdminPage() {
     if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
     if (!novoQuarto.nome || !novoQuarto.preco) return alert('Preencha nome e preço')
     await supabase.from('quartos').insert({
-      ...novoQuarto,
+      nome: novoQuarto.nome,
+      descricao: novoQuarto.descricao,
       preco: parseFloat(novoQuarto.preco),
       capacidade: parseInt(novoQuarto.capacidade),
-      comodidades: novoQuarto.comodidades.split(',').map(c => c.trim()).filter(Boolean)
+      comodidades: novoQuarto.comodidades.split(',').map(c => c.trim()).filter(Boolean),
+      fotos: novoQuarto.fotos.split('\n').map(f => f.trim()).filter(Boolean),
     })
-    setNovoQuarto({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '' })
+    setNovoQuarto({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '', fotos: '' })
     setMsg('Quarto adicionado!')
+    carregar()
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const iniciarEdicaoQuarto = (q: any) => {
+    setEditandoQuarto({
+      ...q,
+      preco: String(q.preco ?? ''),
+      capacidade: String(q.capacidade ?? '2'),
+      comodidades: (q.comodidades || []).join(', '),
+      fotos: (q.fotos || []).join('\n'),
+    })
+  }
+
+  const salvarEdicaoQuarto = async () => {
+    if (!supabase || !editandoQuarto) return
+    const { error } = await supabase.from('quartos').update({
+      nome: editandoQuarto.nome,
+      descricao: editandoQuarto.descricao,
+      preco: parseFloat(editandoQuarto.preco),
+      capacidade: parseInt(editandoQuarto.capacidade),
+      comodidades: editandoQuarto.comodidades.split(',').map((c: string) => c.trim()).filter(Boolean),
+      fotos: editandoQuarto.fotos.split('\n').map((f: string) => f.trim()).filter(Boolean),
+      ativo: editandoQuarto.ativo,
+    }).eq('id', editandoQuarto.id)
+
+    if (error) return alert('Erro ao salvar quarto: ' + error.message)
+    setEditandoQuarto(null)
+    setMsg('Quarto atualizado!')
     carregar()
     setTimeout(() => setMsg(''), 3000)
   }
@@ -184,6 +216,9 @@ export default function AdminPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
               {quartos.map(q => (
                 <div key={q.id} style={{ background: '#fff', borderRadius: '14px', padding: '20px', border: '0.5px solid #e0d8c8' }}>
+                  {q.fotos?.[0] && (
+                    <img src={q.fotos[0]} alt={q.nome} style={{ width: '100%', height: '130px', objectFit: 'cover', borderRadius: '10px', marginBottom: '14px' }} />
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', fontSize: '16px', margin: '0 0 4px' }}>{q.nome}</h3>
                     <span style={{ background: q.ativo ? '#1D6A3A22' : '#c0392b22', color: q.ativo ? '#1D6A3A' : '#c0392b', fontSize: '11px', padding: '2px 8px', borderRadius: '10px' }}>
@@ -192,9 +227,56 @@ export default function AdminPage() {
                   </div>
                   <p style={{ color: '#888', fontSize: '13px', marginBottom: '10px' }}>{q.descricao?.slice(0, 60)}...</p>
                   <div style={{ fontSize: '20px', fontWeight: 700, color: '#1A5276' }}>R$ {q.preco.toFixed(2).replace('.', ',')}<span style={{ fontSize: '12px', color: '#aaa', fontWeight: 400 }}>/noite</span></div>
+                  <button onClick={() => iniciarEdicaoQuarto(q)} style={{ marginTop: '14px', background: '#F9F5EE', color: '#1A5276', border: '1px solid #e0d8c8', padding: '8px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    Editar
+                  </button>
                 </div>
               ))}
             </div>
+
+            {editandoQuarto && (
+              <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8', marginBottom: '24px' }}>
+                <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '20px' }}>Editar quarto</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={labelStyle}>Nome do quarto</label>
+                    <input value={editandoQuarto.nome} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, nome: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Preco por noite (R$)</label>
+                    <input value={editandoQuarto.preco} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, preco: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Capacidade</label>
+                    <input value={editandoQuarto.capacidade} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, capacidade: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Comodidades</label>
+                    <input value={editandoQuarto.comodidades} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, comodidades: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>Descricao</label>
+                    <textarea value={editandoQuarto.descricao || ''} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, descricao: e.target.value }))} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>Fotos por URL</label>
+                    <textarea value={editandoQuarto.fotos} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, fotos: e.target.value }))} rows={4} placeholder="Cole uma URL de imagem por linha" style={{ ...inputStyle, resize: 'vertical' }} />
+                  </div>
+                  <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#555', fontSize: '14px' }}>
+                    <input type="checkbox" checked={editandoQuarto.ativo} onChange={e => setEditandoQuarto((prev: any) => ({ ...prev, ativo: e.target.checked }))} />
+                    Quarto ativo
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                  <button onClick={salvarEdicaoQuarto} style={{ background: '#1A5276', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                    Salvar alteracoes
+                  </button>
+                  <button onClick={() => setEditandoQuarto(null)} style={{ background: '#fff', color: '#777', border: '1px solid #ddd', padding: '12px 20px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '0.5px solid #e0d8c8' }}>
               <h3 style={{ fontFamily: 'Georgia, serif', color: '#1A5276', marginBottom: '20px' }}>Adicionar novo quarto</h3>
@@ -217,6 +299,12 @@ export default function AdminPage() {
                   <textarea placeholder="Descreva o quarto..." value={novoQuarto.descricao}
                     onChange={e => setNovoQuarto(prev => ({ ...prev, descricao: e.target.value }))}
                     rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Fotos por URL</label>
+                  <textarea placeholder="Cole uma URL de imagem por linha" value={novoQuarto.fotos}
+                    onChange={e => setNovoQuarto(prev => ({ ...prev, fotos: e.target.value }))}
+                    rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
                 </div>
               </div>
               <button onClick={salvarQuarto} style={{ marginTop: '16px', background: '#1A5276', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
