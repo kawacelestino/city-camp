@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
+export const dynamic = 'force-dynamic'
+
 async function getQuartos() {
   if (!supabase) return []
   const { data } = await supabase.from('quartos').select('*').eq('ativo', true)
