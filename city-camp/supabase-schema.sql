@@ -99,3 +99,25 @@ create policy "Admin pode tudo em reservas" on reservas for all using (true);
 create policy "Admin pode tudo em bloqueios" on bloqueios for all using (true);
 create policy "Admin pode tudo em promocoes" on promocoes for all using (true);
 create policy "Admin pode tudo em produtos" on produtos for all using (true);
+
+-- Storage para fotos dos quartos
+insert into storage.buckets (id, name, public)
+values ('quartos', 'quartos', true)
+on conflict (id) do update set public = true;
+
+create policy "Fotos dos quartos visiveis para todos"
+on storage.objects for select
+using (bucket_id = 'quartos');
+
+create policy "Admin pode enviar fotos dos quartos"
+on storage.objects for insert
+with check (bucket_id = 'quartos');
+
+create policy "Admin pode atualizar fotos dos quartos"
+on storage.objects for update
+using (bucket_id = 'quartos')
+with check (bucket_id = 'quartos');
+
+create policy "Admin pode remover fotos dos quartos"
+on storage.objects for delete
+using (bucket_id = 'quartos');

@@ -28,7 +28,6 @@ export default async function Home() {
       <header style={{ background: '#1A5276', padding: '16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ color: '#D4AC0D', fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 700, margin: 0 }}>City Camp</h1>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12px', margin: 0 }}>Palheta Azul</p>
         </div>
         <Link href="/admin" style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', textDecoration: 'none' }}>Área Admin</Link>
       </header>

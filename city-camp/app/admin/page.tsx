@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
 const ADMIN_PASSWORD = 'citycamp2025'
+const FOTOS_BUCKET = 'quartos'
 
 type Reserva = {
   id: string
@@ -79,6 +80,7 @@ export default function AdminPage() {
   const [novoQuarto, setNovoQuarto] = useState<NovoQuarto>({ nome: '', descricao: '', preco: '', capacidade: '2', comodidades: '', fotos: '' })
   const [editandoQuarto, setEditandoQuarto] = useState<QuartoEditavel | null>(null)
   const [editandoPromocao, setEditandoPromocao] = useState<PromocaoEditavel | null>(null)
+  const [enviandoFoto, setEnviandoFoto] = useState(false)
   const [msg, setMsg] = useState('')
 
   const carregar = async () => {
@@ -221,6 +223,50 @@ export default function AdminPage() {
     setMsg('Quarto atualizado!')
     carregar()
     setTimeout(() => setMsg(''), 3000)
+  }
+
+  const enviarFotos = async (arquivos: FileList | null, aplicarUrls: (urls: string[]) => void) => {
+    if (!supabase) return alert('Supabase nao configurado. Adicione as variaveis de ambiente no Vercel.')
+    if (!arquivos?.length) return
+
+    setEnviandoFoto(true)
+    try {
+      const urls: string[] = []
+      for (const arquivo of Array.from(arquivos)) {
+        if (!arquivo.type.startsWith('image/')) {
+          alert('Envie apenas arquivos de imagem.')
+          continue
+        }
+
+        const extensao = arquivo.name.split('.').pop()?.toLowerCase() || 'jpg'
+        const nomeArquivo = `${Date.now()}-${crypto.randomUUID()}.${extensao}`
+        const caminho = `quartos/${nomeArquivo}`
+        const { error } = await supabase.storage
+          .from(FOTOS_BUCKET)
+          .upload(caminho, arquivo, { cacheControl: '3600', upsert: false })
+
+        if (error) throw error
+
+        const { data } = supabase.storage.from(FOTOS_BUCKET).getPublicUrl(caminho)
+        urls.push(data.publicUrl)
+      }
+
+      if (urls.length > 0) {
+        aplicarUrls(urls)
+        setMsg('Imagem enviada!')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido'
+      alert('Erro ao enviar imagem: ' + message)
+    } finally {
+      setEnviandoFoto(false)
+    }
+  }
+
+  const adicionarUrls = (atual: string, urls: string[]) => {
+    const existentes = atual.split('\n').map(f => f.trim()).filter(Boolean)
+    return [...existentes, ...urls].join('\n')
   }
 
   const statusColor: Record<string, string> = { confirmada: '#1D6A3A', pendente: '#D4AC0D', cancelada: '#c0392b', paga: '#1A5276' }
@@ -385,8 +431,22 @@ export default function AdminPage() {
                     <textarea value={editandoQuarto.descricao || ''} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, descricao: e.target.value }) : prev)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Fotos por URL</label>
+                    <label style={labelStyle}>Fotos do quarto</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      disabled={enviandoFoto}
+                      onChange={e => enviarFotos(e.target.files, urls => {
+                        setEditandoQuarto(prev => prev ? ({ ...prev, fotos: adicionarUrls(prev.fotos, urls) }) : prev)
+                        e.target.value = ''
+                      })}
+                      style={{ ...inputStyle, marginBottom: '10px', background: '#fff' }}
+                    />
                     <textarea value={editandoQuarto.fotos} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, fotos: e.target.value }) : prev)} rows={4} placeholder="Cole uma URL de imagem por linha" style={{ ...inputStyle, resize: 'vertical' }} />
+                    <div style={{ color: '#999', fontSize: '12px', marginTop: '6px' }}>
+                      {enviandoFoto ? 'Enviando imagem...' : 'Escolha imagens do computador ou cole URLs, uma por linha.'}
+                    </div>
                   </div>
                   <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#555', fontSize: '14px' }}>
                     <input type="checkbox" checked={editandoQuarto.ativo} onChange={e => setEditandoQuarto(prev => prev ? ({ ...prev, ativo: e.target.checked }) : prev)} />
@@ -422,10 +482,24 @@ export default function AdminPage() {
                     rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Fotos por URL</label>
+                  <label style={labelStyle}>Fotos do quarto</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={enviandoFoto}
+                    onChange={e => enviarFotos(e.target.files, urls => {
+                      setNovoQuarto(prev => ({ ...prev, fotos: adicionarUrls(prev.fotos, urls) }))
+                      e.target.value = ''
+                    })}
+                    style={{ ...inputStyle, marginBottom: '10px', background: '#fff' }}
+                  />
                   <textarea placeholder="Cole uma URL de imagem por linha" value={novoQuarto.fotos}
                     onChange={e => setNovoQuarto(prev => ({ ...prev, fotos: e.target.value }))}
                     rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
+                  <div style={{ color: '#999', fontSize: '12px', marginTop: '6px' }}>
+                    {enviandoFoto ? 'Enviando imagem...' : 'Escolha imagens do computador ou cole URLs, uma por linha.'}
+                  </div>
                 </div>
               </div>
               <button onClick={salvarQuarto} style={{ marginTop: '16px', background: '#1A5276', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
